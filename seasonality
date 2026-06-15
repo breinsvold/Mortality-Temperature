@@ -1,0 +1,22 @@
+# Map columns (adjust right-hand side to match names(FullData) output)
+names(FullData)[names(FullData) == "e"]     <- "date"
+names(FullData)[names(FullData) == "CVD-R"] <- "cvd_r"
+
+# Prepare time variable
+FullData$date <- as.Date(FullData$date)
+FullData$time <- as.numeric(FullData$date)
+
+# Degrees of freedom: (number of calendar years x 7) - 1
+n_years <- 2025 - 2005 + 1   # 21
+k <- n_years * 7 - 1         # 146
+
+# Fit GAM (Poisson for count data)
+fit <- gam(cvd_r ~ s(time, bs = "cr", k = k),
+           family = poisson(link = "log"),
+           data = FullData)
+
+# Add fitted values to the table
+FullData$fitted <- as.numeric(predict(fit, type = "response"))
+
+head(FullData)
+summary(fit)
