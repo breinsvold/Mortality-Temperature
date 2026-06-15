@@ -1,0 +1,72 @@
+library(dlnm)
+library(splines)
+
+# ------------------------------------------------------------
+# Setup
+# ------------------------------------------------------------
+FullData$utci_max <- FullData$`UTCI(max)`
+FullData$time     <- as.numeric(FullData$date)
+n_years <- as.numeric(diff(range(FullData$date))) / 365.25
+
+cen.val  <- median(FullData$utci_max, na.rm = TRUE)
+warm.val <- round(quantile(FullData$utci_max, 0.99, na.rm = TRUE), 1)
+cold.val <- round(quantile(FullData$utci_max, 0.01, na.rm = TRUE), 1)
+
+uvals   <- seq(floor(min(FullData$utci_max, na.rm = TRUE)),
+               ceiling(max(FullData$utci_max, na.rm = TRUE)), by = 0.1)
+at.vals <- sort(unique(c(uvals, warm.val, cold.val)))
+
+# ------------------------------------------------------------
+# Single cross-basis, no-effect cutoff at lag 14 for both
+# ------------------------------------------------------------
+maxlag <- 14
+
+cb.utci <- crossbasis(
+  FullData$utci_max,
+  lag    = maxlag,
+  argvar = list(fun = "ns",
+                knots = quantile(FullData$utci_max,
+                                 c(.10, .75, .90), na.rm = TRUE)),
+  arglag = list(fun = "ns", knots = logknots(maxlag, 2))
+)
+
+model.utci <- glm(cvd_r ~ cb.utci + ns(time, df = round(7 * n_years)),
+                  family = quasipoisson(), data = FullData)
+
+pred.utci <- crosspred(cb.utci, model.utci, cen = cen.val, at = at.vals)
+
+# ------------------------------------------------------------
+# Common y-axis range from BOTH slices (point estimates + CIs)
+# ------------------------------------------------------------
+warm.row <- as.character(warm.val)
+cold.row <- as.character(cold.val)
+
+yvals <- c(pred.utci$matRRlow[warm.row, ], pred.utci$matRRhigh[warm.row, ],
+           pred.utci$matRRlow[cold.row, ], pred.utci$matRRhigh[cold.row, ])
+
+ylim.common <- range(yvals, 1)   # include RR = 1
+
+# ============================================================
+# Two plots: identical RR (y) and lag (x) scales
+# ============================================================
+par(mfrow = c(1, 2))
+
+# Warm stress (99th percentile)
+plot(pred.utci, "slices", var = warm.val,
+     col = "red", lwd = 2, ci = "area",
+     ci.arg = list(col = rgb(1, 0, 0, 0.2)),
+     ylim = ylim.common,
+     ylab = "RR", xlab = "Lag (days)",
+     main = paste0("Warm stress (", warm.val, " C)"))
+abline(h = 1, lty = 2, col = "grey40")
+
+# Cold stress (1st percentile)
+plot(pred.utci, "slices", var = cold.val,
+     col = "blue", lwd = 2, ci = "area",
+     ci.arg = list(col = rgb(0, 0, 1, 0.2)),
+     ylim = ylim.common,
+     ylab = "RR", xlab = "Lag (days)",
+     main = paste0("Cold stress (", cold.val, " C)"))
+abline(h = 1, lty = 2, col = "grey40")
+
+par(mfrow = c(1, 1))
