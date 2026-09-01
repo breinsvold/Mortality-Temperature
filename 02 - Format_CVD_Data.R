@@ -40,8 +40,35 @@ county_daily_deaths <- df_long %>%
 
 county_daily_deaths
 
-# ---- Clean county names & combine Sarpy + Douglas into "Omaha" ----
-df_long_clean <- df_long %>%
+# ---- Clean names, combine into six groups, update the dataframe ----
+# Three city groups (pulled out of the regions)
+omaha_counties     <- c("Douglas", "Sarpy")
+lincoln_counties   <- c("Lancaster")              # Lincoln the CITY = Lancaster County
+tricities_counties <- c("Hall", "Buffalo", "Adams", "Kearney")
+
+# Three regions (remaining counties; all 93 assigned exactly once)
+west_counties <- c(
+  "Dundy","Hitchcock","Red Willow","Chase","Hayes","Frontier","Perkins",
+  "Kimball","Cheyenne","Deuel","Keith","Lincoln","Banner","Morrill","Garden",
+  "Scotts Bluff","Sioux","Dawes","Box Butte","Sheridan","Grant","Hooker",
+  "Thomas","Arthur","McPherson","Logan","Blaine","Loup","Cherry","Brown",
+  "Rock","Keya Paha"
+)
+
+southeast_counties <- c(
+  "Custer","Sherman","Howard","Merrick","Polk","Butler","Saunders","Dawson",
+  "Hamilton","York","Seward","Cass","Gosper","Phelps","Clay","Fillmore",
+  "Saline","Otoe","Harlan","Franklin","Webster","Nuckolls","Thayer",
+  "Jefferson","Gage","Johnson","Nemaha","Pawnee","Richardson","Furnas"
+)
+
+northeast_counties <- c(
+  "Garfield","Wheeler","Valley","Greeley","Boone","Nance","Antelope","Holt",
+  "Madison","Platte","Colfax","Stanton","Pierce","Wayne","Cedar","Knox","Boyd",
+  "Dixon","Dakota","Thurston","Cuming","Burt","Dodge","Washington"
+)
+
+CVD_data <- df_long %>%
   mutate(FAC_COUNTY = case_when(
     FAC_COUNTY %in% c("butler", "Butler")     ~ "Butler",
     FAC_COUNTY %in% c("cherry", "Cherry")     ~ "Cherry",
@@ -50,34 +77,28 @@ df_long_clean <- df_long %>%
     FAC_COUNTY %in% c("madison", "Madison")   ~ "Madison",
     FAC_COUNTY %in% c("platte", "Platte")     ~ "Platte",
     FAC_COUNTY %in% c("thurston", "Thurston") ~ "Thurston",
-    FAC_COUNTY %in% c("Sarpy", "Douglas")     ~ "Omaha",
     TRUE ~ FAC_COUNTY
   )) %>%
   filter(!FAC_COUNTY %in% c("NULL", "United States", "Unknown")) %>%
   filter(!is.na(FAC_COUNTY)) %>%
-  group_by(FAC_COUNTY, DOD_STRING, cvd_type) %>%
+  mutate(GROUP = case_when(
+    FAC_COUNTY %in% omaha_counties     ~ "Omaha",
+    FAC_COUNTY %in% lincoln_counties   ~ "Lincoln",
+    FAC_COUNTY %in% tricities_counties ~ "Tri-Cities",
+    FAC_COUNTY %in% west_counties      ~ "West",
+    FAC_COUNTY %in% southeast_counties ~ "Southeast",
+    FAC_COUNTY %in% northeast_counties ~ "Northeast",
+    TRUE ~ NA_character_
+  )) %>%
+  filter(!is.na(GROUP)) %>%
+  group_by(GROUP, DOD_STRING, cvd_type) %>%
   summarise(deaths = sum(deaths), .groups = "drop") %>%
-  arrange(FAC_COUNTY, DOD_STRING)
+  arrange(GROUP, DOD_STRING)
 
-df_long_clean
-
-# ---- New daily death rate table: manually combined names, nulls removed ----
-new_county_daily_deaths <- df_long %>%
+# ---- Group daily death rate table (rates only; combining already done) ----
+group_daily_deaths <- CVD_data %>%
   filter(cvd_type == "total_cvd_deaths") %>%
-  mutate(FAC_COUNTY = case_when(
-    FAC_COUNTY %in% c("butler", "Butler")     ~ "Butler",
-    FAC_COUNTY %in% c("cherry", "Cherry")     ~ "Cherry",
-    FAC_COUNTY %in% c("hall", "Hall")         ~ "Hall",
-    FAC_COUNTY %in% c("keith", "Keith")       ~ "Keith",
-    FAC_COUNTY %in% c("madison", "Madison")   ~ "Madison",
-    FAC_COUNTY %in% c("platte", "Platte")     ~ "Platte",
-    FAC_COUNTY %in% c("thurston", "Thurston") ~ "Thurston",
-    FAC_COUNTY %in% c("Sarpy", "Douglas")     ~ "Omaha",
-    TRUE ~ FAC_COUNTY
-  )) %>%
-  filter(!FAC_COUNTY %in% c("NULL", "United States", "Unknown")) %>%
-  filter(!is.na(FAC_COUNTY)) %>%
-  group_by(FAC_COUNTY) %>%
+  group_by(GROUP) %>%
   summarise(
     total_cvd_deaths = sum(deaths),
     n_days           = n_days_total,
@@ -86,4 +107,4 @@ new_county_daily_deaths <- df_long %>%
   ) %>%
   arrange(desc(daily_death_rate))
 
-new_county_daily_deaths
+group_daily_deaths
