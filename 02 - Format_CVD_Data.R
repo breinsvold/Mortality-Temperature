@@ -52,11 +52,11 @@ west_counties <- c(
   "Kimball","Cheyenne","Deuel","Keith","Lincoln","Banner","Morrill","Garden",
   "Scotts Bluff","Sioux","Dawes","Box Butte","Sheridan","Grant","Hooker",
   "Thomas","Arthur","McPherson","Logan","Blaine","Loup","Cherry","Brown",
-  "Rock","Keya Paha"
+  "Rock","Keya Paha", "Custer"
 )
 
 southeast_counties <- c(
-  "Custer","Sherman","Howard","Merrick","Polk","Butler","Saunders","Dawson",
+  "Sherman","Howard","Merrick","Polk","Butler","Saunders","Dawson",
   "Hamilton","York","Seward","Cass","Gosper","Phelps","Clay","Fillmore",
   "Saline","Otoe","Harlan","Franklin","Webster","Nuckolls","Thayer",
   "Jefferson","Gage","Johnson","Nemaha","Pawnee","Richardson","Furnas"
