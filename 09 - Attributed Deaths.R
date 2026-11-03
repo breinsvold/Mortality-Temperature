@@ -29,8 +29,6 @@ library(dlnm)
 library(splines)
 library(mixmeta)
 library(dplyr)
-library(knitr)
-library(kableExtra)
 
 if (!exists("EXPOSURE")) EXPOSURE <- "utci_max"
 INFILE   <- "CVD-UTCI_dlnm_data.csv"
@@ -228,83 +226,11 @@ write.csv(res_overall_ur,     file.path(OUTDIR, paste0("overall_urbanrural_", EX
 write.csv(res_causes_pooled,  file.path(OUTDIR, paste0("causes_pooled_", EXPOSURE, ".csv")), row.names=FALSE)
 write.csv(res_causes_ur,      file.path(OUTDIR, paste0("causes_urbanrural_", EXPOSURE, ".csv")), row.names=FALSE)
 
-## --- helper to format "AN (lo, hi)", bolding when CI excludes 0 -----
-# significant = CI does not cross zero (both bounds strictly same sign).
-is_sig <- function(lo, hi) (lo > 0 & hi > 0) | (lo < 0 & hi < 0)
-fmt <- function(an, lo, hi) {
-  s <- sprintf("%.0f (%.0f, %.0f)", an, lo, hi)
-  ifelse(is_sig(lo, hi), paste0("<strong>", s, "</strong>"), s)
-}
-
-## --- TABLE 1: OVERALL curve (Total CVD) -----------------------------
-os <- res_overall_pooled              # group == "All"
-t1_split <- os %>% filter(split %in% c("Cold (<9)","Heat (>26)")) %>%
-  transmute(Category = split, `Attributable deaths (95% CI)` = fmt(AN,AN_lo,AN_hi))
-# order categories cold->hot for the by-category block
-cat_order <- UTCI_CATS$lab[UTCI_CATS$lab != "No stress"]
-t1_cat <- os %>% filter(!split %in% c("Cold (<9)","Heat (>26)")) %>%
-  mutate(Category = factor(split, levels = cat_order)) %>% arrange(Category) %>%
-  transmute(Category = as.character(Category),
-            `Attributable deaths (95% CI)` = fmt(AN,AN_lo,AN_hi))
-t1_ur <- res_overall_ur %>%
-  transmute(Category = paste0(group, " - ", split),
-            `Attributable deaths (95% CI)` = fmt(AN,AN_lo,AN_hi))
-
-t1 <- bind_rows(
-  data.frame(Category="\u2014 Cold vs heat (whole curve) \u2014", `Attributable deaths (95% CI)`="", check.names=FALSE),
-  t1_split,
-  data.frame(Category="\u2014 By UTCI category \u2014", `Attributable deaths (95% CI)`="", check.names=FALSE),
-  t1_cat,
-  data.frame(Category="\u2014 Urban / rural pools \u2014", `Attributable deaths (95% CI)`="", check.names=FALSE),
-  t1_ur)
-
-k1 <- kbl(t1, caption = paste0("Attributable Total-CVD deaths from UTCI (",
-                               EXPOSURE, "), overall pooled curve. Cold < 9\u00B0C, Heat > 26\u00B0C. ",
-                               "CIs are exact (sim draws summed across regions before percentiles). ",
-                               "Bold = 95% CI excludes zero (significant)."),
-          booktabs = TRUE, format = "html", escape = FALSE) %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped","hover")) %>%
-  row_spec(which(grepl("^\u2014", t1$Category)), bold = TRUE, background = "#f0f0f0")
-save_kable(k1, file.path(OUTDIR, paste0("table1_overall_", EXPOSURE, ".html")))
-
-## --- TABLE 2: per-cause ---------------------------------------------
-t2_base <- res_causes_pooled %>%
-  filter(split %in% c("Cold (<9)","Heat (>26)")) %>%
-  mutate(val = fmt(AN,AN_lo,AN_hi)) %>%
-  select(cause, split, val) %>%
-  tidyr::pivot_wider(names_from = split, values_from = val)
-
-t2_ur <- res_causes_ur %>%
-  filter(split %in% c("Cold (<9)","Heat (>26)")) %>%   # totals only, not categories
-  mutate(val = fmt(AN,AN_lo,AN_hi),
-         col = paste0(group, " ", ifelse(split == "Cold (<9)","cold","heat"))) %>%
-  select(cause, col, val) %>%
-  tidyr::pivot_wider(names_from = col, values_from = val)
-
-t2 <- t2_base %>% left_join(t2_ur, by = "cause") %>% rename(Cause = cause)
-
-# Ensure every expected column exists. For utci_min there may be no
-# heat-stress days (nighttime UTCI rarely exceeds 26), so Heat / Urban
-# heat / Rural heat columns can be absent from the pivot. Fill any
-# missing column with "\u2014" (n/a) so the table is complete and the
-# grouped header always matches the column count.
-allcols <- c("Cause", "Cold (<9)", "Heat (>26)",
-             "Urban cold", "Urban heat", "Rural cold", "Rural heat")
-for (cc in allcols) if (!cc %in% names(t2)) t2[[cc]] <- "\u2014"
-t2 <- t2[, allcols]
-
-k2 <- kbl(t2, caption = paste0("Attributable deaths by CVD cause from UTCI (",
-                               EXPOSURE, "). Cold < 9\u00B0C, Heat > 26\u00B0C. Values: AN (95% CI). ",
-                               "Bold = significant (CI excludes zero). \u2014 = no days in range ",
-                               "(e.g. night-time UTCI rarely reaches heat stress)."),
-          booktabs = TRUE, format = "html", escape = FALSE) %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped","hover")) %>%
-  add_header_above(c(" "=1, "Whole curve"=2, "Urban pool"=2, "Rural pool"=2))
-save_kable(k2, file.path(OUTDIR, paste0("table2_by_cause_", EXPOSURE, ".html")))
-
-cat("\nDone. Tables + CSVs in ", normalizePath(OUTDIR), "\n", sep="")
-cat("  table1_overall_", EXPOSURE, ".html     (Total CVD: cold/heat, by category, urban/rural)\n", sep="")
-cat("  table2_by_cause_", EXPOSURE, ".html    (each cause: cold/heat, urban/rural)\n", sep="")
+cat("\nDone. CSVs in ", normalizePath(OUTDIR), "\n", sep="")
+cat("  overall_pooled_", EXPOSURE, ".csv       (Total CVD, pooled curve)\n", sep="")
+cat("  overall_urbanrural_", EXPOSURE, ".csv   (Total CVD, urban/rural curves)\n", sep="")
+cat("  causes_pooled_", EXPOSURE, ".csv        (each cause, pooled curve)\n", sep="")
+cat("  causes_urbanrural_", EXPOSURE, ".csv    (each cause, urban/rural curves)\n", sep="")
 cat("\nCIs are exact: within each pool all regions share one curve, so the\n")
 cat("simulation draws are summed across regions BEFORE taking the 2.5/97.5\n")
 cat("percentiles. Intervals may be asymmetric and may cross zero -- that is\n")
